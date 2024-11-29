@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<ruleset name="CakePHP MongoDB">
+    <arg name="colors"/>
+    <arg name="encoding=UTF-8"/>
+    <arg name="report=full"/>
+    <arg name="parallel=8"/>
+    <arg name="extensions=php"/>
+
+    <config name="installed_paths" value="../../cakephp/cakephp-codesniffer" />
+
+    <rule ref="CakePHP" />
+</ruleset>
