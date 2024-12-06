@@ -37,5 +37,4 @@
 phpcs.xml export-ignore
 phpunit.xml.dist export-ignore
 /.github export-ignore
-/tests/TestCase export-ignore
-/tests/bootstrap.php export-ignore
+/tests export-ignore

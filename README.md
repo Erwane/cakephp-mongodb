@@ -7,6 +7,10 @@
 
 MongoDB support for CakePHP 4.x & 5.X
 
+## Work in progress
+
+Not usable now, maybe one day. You can follow this project :)
+
 ## Requirements
 
 * MongoDB (php-mongodb or pecl mongodb).
