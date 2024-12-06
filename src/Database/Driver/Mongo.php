@@ -7,13 +7,15 @@ use Cake\Core\App;
 use Cake\Database\Driver;
 use Cake\Database\DriverFeatureEnum;
 use Cake\Database\Exception\MissingConnectionException;
-use Cake\Database\Query as DbQuery;
+use Cake\Database\Query;
+use Cake\Database\ValueBinder;
 use Cake\Database\Schema\SchemaDialect;
 use Cake\Database\StatementInterface;
-use CakeMongo\Database\Query;
+use CakeMongo\Database\QueryCompiler;
 use CakeMongo\Database\Schema\CollectionSchema;
 use CakeMongo\Database\Schema\MongoSchemaDialect;
 use CakeMongo\Database\Statement\MongoStatement;
+use CakeMongo\ODM\Query\SelectQuery;
 use Closure;
 use Exception;
 use MongoDB\Client;
@@ -139,11 +141,22 @@ class Mongo extends Driver
     /**
      * @inheritDoc
      */
-    public function run(Query|DbQuery $query): StatementInterface
+    public function run(Query $query): StatementInterface
     {
         $callable = $query->callable();
-        $values = $query->clause('values');
-        $results = $callable($values->getValues());
+
+        if ($query instanceof SelectQuery) {
+            $pipeline = $query->build();
+            try {
+                $results = $callable($pipeline);
+            } catch (\Exception $e) {
+                debug($e);
+                exit;
+            }
+        } else {
+            $values = $query->clause('values');
+            $results = $callable($values->getValues());
+        }
         $statement = new MongoStatement($results, $this, $this->getResultSetDecorators($query));
 
         return $statement;
@@ -196,4 +209,21 @@ class Mongo extends Driver
     {
         // TODO: Implement supports() method.
     }
+
+    /**
+     * @return \CakeMongo\Database\QueryCompiler
+     */
+    public function newCompiler(): QueryCompiler
+    {
+        return new QueryCompiler();
+    }
+
+    public function buildQuery(Query $query, ValueBinder $binder): array
+    {
+        $processor = $this->newCompiler();
+        $query = $this->transformQuery($query);
+
+        return $processor->build($query, $binder);
+    }
+
 }

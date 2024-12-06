@@ -489,6 +489,11 @@ class Collection implements RepositoryInterface, EventListenerInterface, EventDi
         }
     }
 
+    public function hasForcedSchema(): bool
+    {
+        return false;
+    }
+
     /**
      * Test to see if a Table has a specific field/column.
      * Delegates to the schema object and checks for column presence
@@ -593,8 +598,23 @@ class Collection implements RepositoryInterface, EventListenerInterface, EventDi
 
     public function find(string $type = 'all', ...$args): QueryInterface
     {
-        // TODO: Implement find() method.
+        return $this->callFinder($type, $this->selectQuery(), ...$args);
     }
+
+    /**
+     * Returns the query as passed.
+     *
+     * By default findAll() applies no query clauses, you can override this
+     * method in subclasses to modify how `find('all')` works.
+     *
+     * @param \Cake\ORM\Query\SelectQuery $query The query to find with
+     * @return \Cake\ORM\Query\SelectQuery The query builder
+     */
+    public function findAll(SelectQuery $query): SelectQuery
+    {
+        return $query;
+    }
+
 
     public function get(
         mixed $primaryKey,
@@ -1140,4 +1160,201 @@ class Collection implements RepositoryInterface, EventListenerInterface, EventDi
     {
         // TODO: Implement patchEntities() method.
     }
+
+    /**
+     * Returns true if the finder exists for the table
+     *
+     * @param string $type name of finder to check
+     * @return bool
+     */
+    public function hasFinder(string $type): bool
+    {
+        $finder = 'find' . $type;
+
+        return method_exists($this, $finder) || $this->_behaviors->hasFinder($type);
+    }
+
+    /**
+     * Calls a finder method and applies it to the passed query.
+     *
+     * @internal
+     * @template TSubject of \Cake\Datasource\EntityInterface|array
+     * @param string $type Name of the finder to be called.
+     * @param \Cake\ORM\Query\SelectQuery<TSubject> $query The query object to apply the finder options to.
+     * @param mixed ...$args Arguments that match up to finder-specific parameters
+     * @return \Cake\ORM\Query\SelectQuery<TSubject>
+     * @throws \BadMethodCallException
+     * @uses findAll()
+     * @uses findList()
+     * @uses findThreaded()
+     */
+    public function callFinder(string $type, SelectQuery $query, mixed ...$args): SelectQuery
+    {
+        $finder = 'find' . $type;
+        if (method_exists($this, $finder)) {
+            return $this->invokeFinder($this->{$finder}(...), $query, $args);
+        }
+
+        // todo Behaviors
+        // if ($this->_behaviors->hasFinder($type)) {
+        //     return $this->_behaviors->callFinder($type, $query, ...$args);
+        // }
+
+        throw new \BadMethodCallException(sprintf(
+            'Unknown finder method `%s` on `%s`.',
+            $type,
+            static::class
+        ));
+    }
+
+    /**
+     * @internal
+     * @template TSubject of \Cake\Datasource\EntityInterface|array
+     * @param \Closure $callable Callable.
+     * @param \Cake\ORM\Query\SelectQuery<TSubject> $query The query object.
+     * @param array $args Arguments for the callable.
+     * @return \Cake\ORM\Query\SelectQuery<TSubject>
+     */
+    public function invokeFinder(Closure $callable, SelectQuery $query, array $args): SelectQuery
+    {
+        $reflected = new \ReflectionFunction($callable);
+        $params = $reflected->getParameters();
+        $secondParam = $params[1] ?? null;
+
+        $secondParamType = $secondParam?->getType();
+        $secondParamTypeName = $secondParamType instanceof \ReflectionNamedType ? $secondParamType->getName() : null;
+
+        $secondParamIsOptions = (
+            count($params) === 2 &&
+            $secondParam?->name === 'options' &&
+            !$secondParam->isVariadic() &&
+            ($secondParamType === null || $secondParamTypeName === 'array')
+        );
+
+        if (($args === [] || isset($args[0])) && $secondParamIsOptions) {
+            // Backwards compatibility of 4.x style finders
+            // with signature `findFoo(SelectQuery $query, array $options)`
+            // called as `find('foo')` or `find('foo', [..])`
+            if (isset($args[0])) {
+                deprecationWarning(
+                    '5.0.0',
+                    'Calling finders with options arrays is deprecated.'
+                    . ' Update your finder methods to used named arguments instead.'
+                );
+                $args = $args[0];
+            }
+            $query->applyOptions($args);
+
+            return $callable($query, $query->getOptions());
+        }
+
+        // Backwards compatibility for 4.x style finders with signatures like
+        // `findFoo(SelectQuery $query, array $options)` called as
+        // `find('foo', key: $value)`.
+        if (!isset($args[0]) && $secondParamIsOptions) {
+            $query->applyOptions($args);
+
+            return $callable($query, $query->getOptions());
+        }
+
+        // Backwards compatibility for core finders like `findList()` called in 4.x
+        // style with an array `find('list', ['valueField' => 'foo'])` instead of
+        // `find('list', valueField: 'foo')`
+        if (isset($args[0]) && is_array($args[0]) && $secondParamTypeName !== 'array') {
+            deprecationWarning(
+                '5.0.0',
+                "Calling `{$reflected->getName()}` finder with options array is deprecated."
+                 . ' Use named arguments instead.'
+            );
+
+            $args = $args[0];
+        }
+
+        if ($args) {
+            $query->applyOptions($args);
+            // Fetch custom args without the query options.
+            $args = $query->getOptions();
+
+            unset($params[0]);
+            $lastParam = end($params);
+            reset($params);
+
+            if ($lastParam === false || !$lastParam->isVariadic()) {
+                $paramNames = [];
+                foreach ($params as $param) {
+                    $paramNames[] = $param->getName();
+                }
+
+                foreach ($args as $key => $value) {
+                    if (is_string($key) && !in_array($key, $paramNames, true)) {
+                        unset($args[$key]);
+                    }
+                }
+            }
+        }
+
+        return $callable($query, ...$args);
+    }
+
+    /**
+     * Provides the dynamic findBy and findAllBy methods.
+     *
+     * @param string $method The method name that was fired.
+     * @param array $args List of arguments passed to the function.
+     * @return \Cake\ORM\Query\SelectQuery
+     * @throws \BadMethodCallException when there are missing arguments, or when
+     *  and & or are combined.
+     */
+    protected function _dynamicFinder(string $method, array $args): SelectQuery
+    {
+        $method = Inflector::underscore($method);
+        preg_match('/^find_([\w]+)_by_/', $method, $matches);
+        if (!$matches) {
+            // find_by_ is 8 characters.
+            $fields = substr($method, 8);
+            $findType = 'all';
+        } else {
+            $fields = substr($method, strlen($matches[0]));
+            $findType = Inflector::variable($matches[1]);
+        }
+        $hasOr = str_contains($fields, '_or_');
+        $hasAnd = str_contains($fields, '_and_');
+
+        $makeConditions = function ($fields, $args): array {
+            $conditions = [];
+            if (count($args) < count($fields)) {
+                throw new BadMethodCallException(sprintf(
+                    'Not enough arguments for magic finder. Got %s required %s',
+                    count($args),
+                    count($fields)
+                ));
+            }
+            foreach ($fields as $field) {
+                $conditions[$this->aliasField($field)] = array_shift($args);
+            }
+
+            return $conditions;
+        };
+
+        if ($hasOr && $hasAnd) {
+            throw new BadMethodCallException(
+                'Cannot mix "and" & "or" in a magic finder. Use find() instead.'
+            );
+        }
+
+        if ($hasOr === false && $hasAnd === false) {
+            $conditions = $makeConditions([$fields], $args);
+        } elseif ($hasOr) {
+            $fields = explode('_or_', $fields);
+            $conditions = [
+                'OR' => $makeConditions($fields, $args),
+            ];
+        } else {
+            $fields = explode('_and_', $fields);
+            $conditions = $makeConditions($fields, $args);
+        }
+
+        return $this->find($findType, conditions: $conditions);
+    }
+
 }

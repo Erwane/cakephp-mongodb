@@ -4,7 +4,6 @@ declare(strict_types=1);
 /**
  * CakePHP(tm) : Rapid Development Framework (https://cakephp.org)
  * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
- *
  * Licensed under The MIT License
  * For full copyright and license information, please see the LICENSE.txt
  * Redistributions of files must retain the above copyright notice.
@@ -26,16 +25,14 @@ use Cake\Database\TypeMap;
 use Cake\Database\ValueBinder;
 use Cake\Datasource\Exception\RecordNotFoundException;
 use Cake\Datasource\QueryCacher;
-use Cake\Datasource\QueryInterface;
 use Cake\Datasource\ResultSetInterface;
 use Cake\ORM\Association;
 use Cake\ORM\EagerLoader;
-use Cake\ORM\ResultSetFactory;
 use Cake\ORM\Table;
 use CakeMongo\ODM\Collection;
+use CakeMongo\ODM\ResultSetFactory;
 use Closure;
 use InvalidArgumentException;
-use JsonSerializable;
 use Psr\SimpleCache\CacheInterface;
 
 /**
@@ -43,13 +40,15 @@ use Psr\SimpleCache\CacheInterface;
  * loading, automatic fields selection, automatic type casting and to wrap results
  * into a specific iterator that will be responsible for hydrating results if
  * required.
- *
  * @template TSubject of \Cake\Datasource\EntityInterface|array
+ *
  * @extends \Cake\Database\Query\SelectQuery<TSubject>
  */
-class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterface
+class SelectQuery extends DbSelectQuery implements QueryInterface, \Cake\Datasource\QueryInterface
 {
     use CommonQueryTrait;
+
+    protected const METHOD = 'aggregate';
 
     /**
      * Indicates that the operation should append to the list
@@ -134,7 +133,6 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
 
     /**
      * The COUNT(*) for the query.
-     *
      * When set, count query execution will be bypassed.
      *
      * @var int|null
@@ -150,7 +148,6 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
 
     /**
      * A ResultSet.
-     *
      * When set, SelectQuery execution will be bypassed.
      *
      * @var iterable|null
@@ -204,11 +201,9 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
 
     /**
      * Set the result set for a query.
-     *
      * Setting the resultset of a query will make execute() a no-op. Instead
      * of executing the SQL query and fetching results, the ResultSet provided to this
      * method will be returned.
-     *
      * This method is most useful when combined with results stored in a persistent cache.
      *
      * @param iterable $results The results this query should return.
@@ -236,30 +231,23 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
 
     /**
      * Enable result caching for this query.
-     *
      * If a query has caching enabled, it will do the following when executed:
-     *
      * - Check the cache for $key. If there are results no SQL will be executed.
      *   Instead the cached results will be returned.
      * - When the cached data is stale/missing the result set will be cached as the query
      *   is executed.
-     *
      * ### Usage
-     *
      * ```
      * // Simple string key + config
      * $query->cache('my_key', 'db_results');
-     *
      * // Function to generate key.
      * $query->cache(function ($q) {
      *   $key = serialize($q->clause('select'));
      *   $key .= serialize($q->clause('where'));
      *   return md5($key);
      * });
-     *
      * // Using a pre-built cache engine.
      * $query->cache('my_key', $engine);
-     *
      * // Disable caching
      * $query->cache(false);
      * ```
@@ -311,7 +299,6 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
      * Returns a key => value array representing a single aliased field
      * that can be passed directly to the select() method.
      * The key will contain the alias and the value the actual field name.
-     *
      * If the field is already aliased, then it will not be changed.
      * If no $alias is passed, the default table for this query will be used.
      *
@@ -358,10 +345,8 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
 
     /**
      * Fetch the results for this query.
-     *
      * Will return either the results set through setResult(), or execute this query
      * and return the ResultSetDecorator object ready for streaming of results.
-     *
      * ResultSetDecorator is a traversable object that implements the methods found
      * on Cake\Collection\Collection.
      *
@@ -404,10 +389,8 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
 
     /**
      * Register a new MapReduce routine to be executed on top of the database results
-     *
      * The MapReduce routing will only be run when the query is executed and the first
      * result is attempted to be fetched.
-     *
      * If the third argument is set to true, it will erase previous map reducers
      * and replace it with the arguments passed.
      *
@@ -447,85 +430,65 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
     /**
      * Registers a new formatter callback function that is to be executed when trying
      * to fetch the results from the database.
-     *
      * If the second argument is set to true, it will erase previous formatters
      * and replace them with the passed first argument.
-     *
      * Callbacks are required to return an iterator object, which will be used as
      * the return value for this query's result. Formatter functions are applied
      * after all the `MapReduce` routines for this query have been executed.
-     *
      * Formatting callbacks will receive two arguments, the first one being an object
      * implementing `\Cake\Collection\CollectionInterface`, that can be traversed and
      * modified at will. The second one being the query instance on which the formatter
      * callback is being applied.
-     *
      * Usually the query instance received by the formatter callback is the same query
      * instance on which the callback was attached to, except for in a joined
      * association, in that case the callback will be invoked on the association source
      * side query, and it will receive that query instance instead of the one on which
      * the callback was originally attached to - see the examples below!
-     *
      * ### Examples:
-     *
      * Return all results from the table indexed by id:
-     *
      * ```
      * $query->select(['id', 'name'])->formatResults(function ($results) {
      *     return $results->indexBy('id');
      * });
      * ```
-     *
      * Add a new column to the ResultSet:
-     *
      * ```
      * $query->select(['name', 'birth_date'])->formatResults(function ($results) {
      *     return $results->map(function ($row) {
      *         $row['age'] = $row['birth_date']->diff(new DateTime)->y;
-     *
      *         return $row;
      *     });
      * });
      * ```
-     *
      * Add a new column to the results with respect to the query's hydration configuration:
-     *
      * ```
      * $query->formatResults(function ($results, $query) {
      *     return $results->map(function ($row) use ($query) {
      *         $data = [
      *             'bar' => 'baz',
      *         ];
-     *
      *         if ($query->isHydrationEnabled()) {
      *             $row['foo'] = new Foo($data)
      *         } else {
      *             $row['foo'] = $data;
      *         }
-     *
      *         return $row;
      *     });
      * });
      * ```
-     *
      * Retaining access to the association target query instance of joined associations,
      * by inheriting the contain callback's query argument:
-     *
      * ```
      * // Assuming a `Articles belongsTo Authors` association that uses the join strategy
-     *
      * $articlesQuery->contain('Authors', function ($authorsQuery) {
      *     return $authorsQuery->formatResults(function ($results, $query) use ($authorsQuery) {
      *         // Here `$authorsQuery` will always be the instance
      *         // where the callback was attached to.
-     *
      *         // The instance passed to the callback in the second
      *         // argument (`$query`), will be the one where the
      *         // callback is actually being applied to, in this
      *         // example that would be `$articlesQuery`.
-     *
      *         // ...
-     *
      *         return $results;
      *     });
      * });
@@ -573,9 +536,7 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
     /**
      * Returns the first result out of executing this query, if the query has not been
      * executed before, it will set the limit clause to 1 for performance reasons.
-     *
      * ### Example:
-     *
      * ```
      * $singleUser = $query->select(['id', 'username'])->first();
      * ```
@@ -594,8 +555,8 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
     /**
      * Get the first result from the executing query or raise an exception.
      *
-     * @throws \Cake\Datasource\Exception\RecordNotFoundException When there is no first record.
      * @return mixed The first result from the ResultSet.
+     * @throws \Cake\Datasource\Exception\RecordNotFoundException When there is no first record.
      */
     public function firstOrFail(): mixed
     {
@@ -614,17 +575,15 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
     /**
      * Returns an array with the custom options that were applied to this query
      * and that were not already processed by another method in this class.
-     *
      * ### Example:
-     *
      * ```
      *  $query->applyOptions(['doABarrelRoll' => true, 'fields' => ['id', 'name']);
      *  $query->getOptions(); // Returns ['doABarrelRoll' => true]
      * ```
      *
+     * @return array
      * @see \Cake\Datasource\QueryInterface::applyOptions() to read about the options that will
      * be processed by this class and not returned by this function
-     * @return array
      * @see applyOptions()
      */
     public function getOptions(): array
@@ -635,9 +594,7 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
     /**
      * Populates or adds parts to current query clauses using an array.
      * This is handy for passing all query clauses at once.
-     *
      * The method accepts the following query clause related options:
-     *
      * - fields: Maps to the select method
      * - conditions: Maps to the where method
      * - limit: Maps to the limit method
@@ -648,13 +605,10 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
      * - contain: Maps to the contain options for eager loading
      * - join: Maps to the join method
      * - page: Maps to the page method
-     *
      * All other options will not affect the query, but will be stored
      * as custom options that can be read via `getOptions()`. Furthermore
      * they are automatically passed to `Model.beforeFind`.
-     *
      * ### Example:
-     *
      * ```
      * $query->applyOptions([
      *   'fields' => ['id', 'name'],
@@ -664,29 +618,23 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
      *   'limit' => 10,
      * ]);
      * ```
-     *
      * Is equivalent to:
-     *
      * ```
      * $query
      *   ->select(['id', 'name'])
      *   ->where(['created >=' => '2013-01-01'])
      *   ->limit(10)
      * ```
-     *
      * Custom options can be read via `getOptions()`:
-     *
      * ```
      * $query->applyOptions([
      *   'fields' => ['id', 'name'],
      *   'custom' => 'value',
      * ]);
      * ```
-     *
      * Here `$options` will hold `['custom' => 'value']` (the `fields`
      * option will be applied to the query instead of being stored, as
      * it's a query clause related option):
-     *
      * ```
      * $options = $query->getOptions();
      * ```
@@ -764,19 +712,14 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
      * Adds new fields to be returned by a `SELECT` statement when this query is
      * executed. Fields can be passed as an array of strings, array of expression
      * objects, a single expression or a single string.
-     *
      * If an array is passed, keys will be used to alias fields using the value as the
      * real field to be aliased. It is possible to alias strings, Expression objects or
      * even other Query objects.
-     *
      * If a callback is passed, the returning array of the function will
      * be used as the list of fields.
-     *
      * By default, this function will append any passed argument to the list of fields
      * to be selected, unless the second argument is set to true.
-     *
      * ### Examples:
-     *
      * ```
      * $query->select(['id', 'title']); // Produces SELECT id, title
      * $query->select(['author' => 'author_id']); // Appends author: SELECT id, title, author_id as author
@@ -786,11 +729,9 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
      *     return ['article_id', 'total' => $query->count('*')];
      * })
      * ```
-     *
      * By default, no fields are selected, if you have an instance of `Cake\ORM\Query` and try to append
      * fields you should also call `Cake\ORM\Query::enableAutoFields()` to select the default fields
      * from the table.
-     *
      * If you pass an instance of a `Cake\ORM\Table` or `Cake\ORM\Association` class,
      * all the fields in the schema of the table or the association will be added to
      * the select clause.
@@ -822,7 +763,6 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
     /**
      * Behaves the exact same as `select()` except adds the field to the list of fields selected and
      * does not disable auto-selecting fields for Associations.
-     *
      * Use this instead of calling `select()` then `enableAutoFields()` to re-enable auto-fields.
      *
      * @param \Cake\Database\ExpressionInterface|\Cake\ORM\Table|\Cake\ORM\Association|\Closure|array|string|float|int $fields Fields
@@ -892,52 +832,38 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
      * Sets the list of associations that should be eagerly loaded along with this
      * query. The list of associated tables passed must have been previously set as
      * associations using the Table API.
-     *
      * ### Example:
-     *
      * ```
      * // Bring articles' author information
      * $query->contain('Author');
-     *
      * // Also bring the category and tags associated to each article
      * $query->contain(['Category', 'Tag']);
      * ```
-     *
      * Associations can be arbitrarily nested using dot notation or nested arrays,
      * this allows this object to calculate joins or any additional queries that
      * must be executed to bring the required associated data.
-     *
      * ### Example:
-     *
      * ```
      * // Eager load the product info, and for each product load other 2 associations
      * $query->contain(['Product' => ['Manufacturer', 'Distributor']);
-     *
      * // Which is equivalent to calling
      * $query->contain(['Products.Manufactures', 'Products.Distributors']);
-     *
      * // For an author query, load his region, state and country
      * $query->contain('Regions.States.Countries');
      * ```
-     *
      * It is possible to control the conditions and fields selected for each of the
      * contained associations:
-     *
      * ### Example:
-     *
      * ```
      * $query->contain(['Tags' => function ($q) {
      *     return $q->where(['Tags.is_popular' => true]);
      * }]);
-     *
      * $query->contain(['Products.Manufactures' => function ($q) {
      *     return $q->select(['name'])->where(['Manufactures.active' => true]);
      * }]);
      * ```
-     *
      * Each association might define special options when eager loaded, the allowed
      * options that can be set per association are:
-     *
      * - `foreignKey`: Used to set a different field to match both tables, if set to false
      *   no join conditions will be generated automatically. `false` can only be used on
      *   joinable associations and cannot be used with hasMany or belongsToMany associations.
@@ -945,9 +871,7 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
      * - `finder`: The finder to use when loading associated records. Either the name of the
      *   finder as a string, or an array to define options to pass to the finder.
      * - `queryBuilder`: Equivalent to passing a callback instead of an options array.
-     *
      * ### Example:
-     *
      * ```
      * // Set options for the hasMany articles that will be eagerly loaded for an author
      * $query->contain([
@@ -956,9 +880,7 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
      *     ]
      * ]);
      * ```
-     *
      * Finders can be configured to use options.
-     *
      * ```
      * // Retrieve translations for the articles, but only those for the `en` and `es` locales
      * $query->contain([
@@ -971,10 +893,8 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
      *     ]
      * ]);
      * ```
-     *
      * When containing associations, it is important to include foreign key columns.
      * Failing to do so will trigger exceptions.
-     *
      * ```
      * // Use a query builder to add conditions to the containment
      * $query->contain('Authors', function ($q) {
@@ -993,7 +913,6 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
      *     }
      * ]);
      * ```
-     *
      * If called with an empty first argument and `$override` is set to true, the
      * previous list will be emptied.
      *
@@ -1080,36 +999,27 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
     /**
      * Adds filtering conditions to this query to only bring rows that have a relation
      * to another from an associated table, based on conditions in the associated table.
-     *
      * This function will add entries in the `contain` graph.
-     *
      * ### Example:
-     *
      * ```
      * // Bring only articles that were tagged with 'cake'
      * $query->matching('Tags', function ($q) {
      *     return $q->where(['name' => 'cake']);
      * });
      * ```
-     *
      * It is possible to filter by deep associations by using dot notation:
-     *
      * ### Example:
-     *
      * ```
      * // Bring only articles that were commented by 'markstory'
      * $query->matching('Comments.Users', function ($q) {
      *     return $q->where(['username' => 'markstory']);
      * });
      * ```
-     *
      * As this function will create `INNER JOIN`, you might want to consider
      * calling `distinct` on this query as you might get duplicate rows if
      * your conditions don't filter them already. This might be the case, for example,
      * of the same user commenting more than once in the same article.
-     *
      * ### Example:
-     *
      * ```
      * // Bring unique articles that were commented by 'markstory'
      * $query->distinct(['Articles.id'])
@@ -1117,7 +1027,6 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
      *         return $q->where(['username' => 'markstory']);
      *     });
      * ```
-     *
      * Please note that the query passed to the closure will only accept calling
      * `select`, `where`, `andWhere` and `orWhere` on it. If you wish to
      * add more complex clauses you can do it directly in the main query.
@@ -1140,11 +1049,8 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
      * Creates a LEFT JOIN with the passed association table while preserving
      * the foreign key matching and the custom conditions that were originally set
      * for it.
-     *
      * This function will add entries in the `contain` graph.
-     *
      * ### Example:
-     *
      * ```
      * // Get the count of articles per user
      * $usersQuery
@@ -1153,9 +1059,7 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
      *     ->groupBy(['Users.id'])
      *     ->enableAutoFields();
      * ```
-     *
      * You can also customize the conditions passed to the LEFT JOIN:
-     *
      * ```
      * // Get the count of articles per user with at least 5 votes
      * $usersQuery
@@ -1166,20 +1070,15 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
      *     ->groupBy(['Users.id'])
      *     ->enableAutoFields();
      * ```
-     *
      * This will create the following SQL:
-     *
      * ```
      * SELECT COUNT(Articles.id) AS total_articles, Users.*
      * FROM users Users
      * LEFT JOIN articles Articles ON Articles.user_id = Users.id AND Articles.votes >= 5
      * GROUP BY USers.id
      * ```
-     *
      * It is possible to left join deep associations by using dot notation
-     *
      * ### Example:
-     *
      * ```
      * // Total comments in articles by 'markstory'
      * $query
@@ -1189,7 +1088,6 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
      *     })
      *    ->groupBy(['Users.id']);
      * ```
-     *
      * Please note that the query passed to the closure will only accept calling
      * `select`, `where`, `andWhere` and `orWhere` on it. If you wish to
      * add more complex clauses you can do it directly in the main query.
@@ -1217,20 +1115,15 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
      * Creates an INNER JOIN with the passed association table while preserving
      * the foreign key matching and the custom conditions that were originally set
      * for it.
-     *
      * This function will add entries in the `contain` graph.
-     *
      * ### Example:
-     *
      * ```
      * // Bring only articles that were tagged with 'cake'
      * $query->innerJoinWith('Tags', function ($q) {
      *     return $q->where(['name' => 'cake']);
      * });
      * ```
-     *
      * This will create the following SQL:
-     *
      * ```
      * SELECT Articles.*
      * FROM articles Articles
@@ -1238,7 +1131,6 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
      * INNER JOIN articles_tags ArticlesTags ON ArticlesTags.tag_id = Tags.id
      *   AND ArticlesTags.articles_id = Articles.id
      * ```
-     *
      * This function works the same as `matching()` with the difference that it
      * will select no fields from the association.
      *
@@ -1265,36 +1157,27 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
     /**
      * Adds filtering conditions to this query to only bring rows that have no match
      * to another from an associated table, based on conditions in the associated table.
-     *
      * This function will add entries in the `contain` graph.
-     *
      * ### Example:
-     *
      * ```
      * // Bring only articles that were not tagged with 'cake'
      * $query->notMatching('Tags', function ($q) {
      *     return $q->where(['name' => 'cake']);
      * });
      * ```
-     *
      * It is possible to filter by deep associations by using dot notation:
-     *
      * ### Example:
-     *
      * ```
      * // Bring only articles that weren't commented by 'markstory'
      * $query->notMatching('Comments.Users', function ($q) {
      *     return $q->where(['username' => 'markstory']);
      * });
      * ```
-     *
      * As this function will create a `LEFT JOIN`, you might want to consider
      * calling `distinct` on this query as you might get duplicate rows if
      * your conditions don't filter them already. This might be the case, for example,
      * of the same article having multiple comments.
-     *
      * ### Example:
-     *
      * ```
      * // Bring unique articles that were commented by 'markstory'
      * $query->distinct(['Articles.id'])
@@ -1302,7 +1185,6 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
      *         return $q->where(['username' => 'markstory']);
      *     });
      * ```
-     *
      * Please note that the query passed to the closure will only accept calling
      * `select`, `where`, `andWhere` and `orWhere` on it. If you wish to
      * add more complex clauses you can do it directly in the main query.
@@ -1329,9 +1211,7 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
 
     /**
      * Creates a copy of this current query, triggers beforeFind and resets some state.
-     *
      * The following state will be cleared:
-     *
      * - autoFields
      * - limit
      * - offset
@@ -1339,7 +1219,6 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
      * - result formatters
      * - order
      * - containments
-     *
      * This method creates query clones that are useful when working with subqueries.
      *
      * @return static
@@ -1375,7 +1254,6 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
 
     /**
      * {@inheritDoc}
-     *
      * Handles cloning eager loaders.
      */
     public function __clone()
@@ -1388,7 +1266,6 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
 
     /**
      * {@inheritDoc}
-     *
      * Returns the COUNT(*) for the query. If the query has not been
      * modified, and the count has already been performed the cached
      * value is returned
@@ -1467,14 +1344,11 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
      * Registers a callback that will be executed when the `count` method in
      * this query is called. The return value for the function will be set as the
      * return value of the `count` method.
-     *
      * This is particularly useful when you need to optimize a query for returning the
      * count, for example removing unnecessary joins, removing group by or just return
      * an estimated number of rows.
-     *
      * The callback will receive as first argument a clone of this query and not this
      * query itself.
-     *
      * If the first param is a null value, the built-in counter function will be called
      * instead
      *
@@ -1490,7 +1364,6 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
 
     /**
      * Toggle hydrating entities.
-     *
      * If set to false array results will be returned for the query.
      *
      * @param bool $enable Use a boolean to set the hydration mode.
@@ -1506,7 +1379,6 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
 
     /**
      * Disable hydrating entities.
-     *
      * Disabling hydration will cause array results to be returned for the query
      * instead of entities.
      *
@@ -1532,7 +1404,6 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
 
     /**
      * Trigger the beforeFind event on the query's repository object.
-     *
      * Will not trigger more than once, and only for select queries.
      *
      * @return void
@@ -1556,11 +1427,21 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
      */
     public function sql(?ValueBinder $binder = null): string
     {
+        return '';
+    }
+
+    public function build(?ValueBinder $binder = null): array
+    {
         $this->triggerBeforeFind();
 
         $this->_transformQuery();
 
-        return parent::sql($binder);
+        if (!$binder) {
+            $binder = $this->getValueBinder();
+            $binder->resetCount();
+        }
+
+        return $this->getConnection()->getDriver()->buildQuery($this, $binder);
     }
 
     /**
@@ -1580,7 +1461,8 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
         } else {
             $results = $this->execute();
         }
-        $results = $this->getEagerLoader()->loadExternal($this, $results);
+
+        // $results = $this->getEagerLoader()->loadExternal($this, $results);
 
         return $this->resultSetFactory()->createResultSet($results, $this);
     }
@@ -1588,7 +1470,7 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
     /**
      * Get resultset factory.
      *
-     * @return \Cake\ORM\ResultSetFactory
+     * @return \CakeMongo\ODM\ResultSetFactory
      */
     public function resultSetFactory(): ResultSetFactory
     {
@@ -1597,15 +1479,13 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
 
     /**
      * Applies some defaults to the query object before it is executed.
-     *
      * Specifically add the FROM clause, adds default table fields if none are
      * specified and applies the joins required to eager load associations defined
      * using `contain`
-     *
      * It also sets the default types for the columns in the select clause
      *
-     * @see \Cake\Database\Query::execute()
      * @return void
+     * @see \Cake\Database\Query::execute()
      */
     protected function _transformQuery(): void
     {
@@ -1619,7 +1499,8 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
             $this->from([$repository->getAlias() => $repository->getTable()]);
         }
         $this->_addDefaultFields();
-        $this->getEagerLoader()->attachAssociations($this, $repository, !$this->_hasFields);
+        // todo: associations
+        // $this->getEagerLoader()->attachAssociations($this, $repository, !$this->_hasFields);
         $this->_addDefaultSelectTypes();
     }
 
@@ -1631,21 +1512,23 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
      */
     protected function _addDefaultFields(): void
     {
-        $select = $this->clause('select');
-        $this->_hasFields = true;
-
-        $repository = $this->getRepository();
-
-        if (!count($select) || $this->_autoFields === true) {
-            $this->_hasFields = false;
-            $this->select($repository->getSchema()->columns());
+        if ($this->_repository->hasForcedSchema()) {
             $select = $this->clause('select');
-        }
+            $this->_hasFields = true;
 
-        if ($this->aliasingEnabled) {
-            $select = $this->aliasFields($select, $repository->getAlias());
+            $repository = $this->getRepository();
+
+            if (!count($select) || $this->_autoFields === true) {
+                $this->_hasFields = false;
+                $this->select($repository->getSchema()->columns());
+                $select = $this->clause('select');
+            }
+
+            if ($this->aliasingEnabled) {
+                $select = $this->aliasFields($select, $repository->getAlias());
+            }
+            $this->select($select, true);
         }
-        $this->select($select, true);
     }
 
     /**
@@ -1677,7 +1560,6 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
 
     /**
      * {@inheritDoc}
-     *
      * @param string $finder The finder method to use.
      * @param mixed ...$args Arguments that match up to finder-specific parameters
      * @return static<TSubject> Returns a modified query.
@@ -1724,19 +1606,18 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
         $eagerLoader = $this->getEagerLoader();
 
         return parent::__debugInfo() + [
-            'hydrate' => $this->_hydrate,
-            'formatters' => count($this->_formatters),
-            'mapReducers' => count($this->_mapReduce),
-            'contain' => $eagerLoader->getContain(),
-            'matching' => $eagerLoader->getMatching(),
-            'extraOptions' => $this->_options,
-            'repository' => $this->_repository,
-        ];
+                'hydrate' => $this->_hydrate,
+                'formatters' => count($this->_formatters),
+                'mapReducers' => count($this->_mapReduce),
+                'contain' => $eagerLoader->getContain(),
+                'matching' => $eagerLoader->getMatching(),
+                'extraOptions' => $this->_options,
+                'repository' => $this->_repository,
+            ];
     }
 
     /**
      * Executes the query and converts the result set into JSON.
-     *
      * Part of JsonSerializable interface.
      *
      * @return \Cake\Datasource\ResultSetInterface<(\Cake\Datasource\EntityInterface|mixed)> The data to convert to JSON.
@@ -1748,7 +1629,6 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
 
     /**
      * Sets whether the ORM should automatically append fields.
-     *
      * By default calling select() will disable auto-fields. You can re-enable
      * auto-fields with this method.
      *
@@ -1776,7 +1656,6 @@ class SelectQuery extends DbSelectQuery implements JsonSerializable, QueryInterf
 
     /**
      * Gets whether the ORM should automatically append fields.
-     *
      * By default calling select() will disable auto-fields. You can re-enable
      * auto-fields with enableAutoFields().
      *

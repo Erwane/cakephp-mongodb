@@ -54,4 +54,9 @@ class InsertQuery extends DbInsertQuery implements QueryInterface
 
         return parent::sql($binder);
     }
+
+    public function build(): array
+    {
+        // TODO: Implement build() method.
+    }
 }

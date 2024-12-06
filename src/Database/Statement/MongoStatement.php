@@ -105,7 +105,17 @@ class MongoStatement implements StatementInterface
      */
     public function fetchAll(int|string $mode = PDO::FETCH_NUM): array
     {
-        // TODO: Implement fetchAll() method.
+        $rows = [];
+
+        foreach ($this->mongo as $item) {
+            $rows[] = $item->getArrayCopy();
+        }
+
+        foreach ($this->resultDecorators as $decorator) {
+            $rows = array_map($decorator, $rows);
+        }
+
+        return $rows;
     }
 
     /**
