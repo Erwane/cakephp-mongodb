@@ -145,6 +145,8 @@ class Mongo extends Driver
     {
         $callable = $query->callable();
 
+        $query->getValueBinder()->attachTo($statement);
+
         if ($query instanceof SelectQuery) {
             $pipeline = $query->build();
             try {
@@ -155,9 +157,12 @@ class Mongo extends Driver
             }
         } else {
             $values = $query->clause('values');
+            debug($values->getValues());
+            exit;
             $results = $callable($values->getValues());
         }
         $statement = new MongoStatement($results, $this, $this->getResultSetDecorators($query));
+        $this->executeStatement($statement);
 
         return $statement;
     }
